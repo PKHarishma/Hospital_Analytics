@@ -1,31 +1,28 @@
 from sentence_transformers import SentenceTransformer
 from Chatbot.load_sql import engine
 from langchain_community.utilities import SQLDatabase
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from sqlalchemy import text
 from pathlib import Path
 import chromadb
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
 db = SQLDatabase(engine)
 
 print("Database connected successfully!")
 
-
-llm = ChatOllama(
-    model="llama3.2",
+llm = ChatGroq(
+    model="openai/gpt-oss-20b",
     temperature=0
 )
 
 print("AI connected successfully!")
 
-
 document_path = (
     Path(__file__).resolve().parent
     / "document"
-    / "HospitalAnalytics.pdf"
+    / "hospitalAnalytics.pdf"
 )
 
 reader = PdfReader(document_path)
@@ -41,7 +38,6 @@ for page in reader.pages:
 print("Total pages:", len(reader.pages))
 print("Extracted characters:", len(pdf_text))
 
-
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
     chunk_overlap=50
@@ -51,11 +47,9 @@ chunks = text_splitter.split_text(pdf_text)
 
 print("Total chunks:", len(chunks))
 
-
 for i, chunk in enumerate(chunks[:5]):
     print(f"\n--- Chunk {i + 1} ---")
     print(chunk)
-
 
 embedding_model = SentenceTransformer(
     "all-MiniLM-L6-v2"
@@ -66,7 +60,6 @@ embeddings = embedding_model.encode(chunks)
 print("Embeddings created successfully!")
 print("Embedding shape:", embeddings.shape)
 
-
 chroma_client = chromadb.PersistentClient(
     path="chroma_db"
 )
@@ -74,7 +67,6 @@ chroma_client = chromadb.PersistentClient(
 collection = chroma_client.get_or_create_collection(
     name="hospital_information"
 )
-
 
 if collection.count() == 0:
     collection.add(
@@ -91,7 +83,6 @@ def ask_hospital(question):
     question_lower = question.lower()
 
     print("\nQuestion received:", question_lower)
-
 
     sql_keywords = [
         "how many",
@@ -127,7 +118,6 @@ def ask_hospital(question):
         "length of stay"
     ]
 
-
     matched_keywords = [
         keyword
         for keyword in sql_keywords
@@ -135,7 +125,6 @@ def ask_hospital(question):
     ]
 
     print("SQL keywords found:", matched_keywords)
-
 
     if matched_keywords:
 
@@ -206,9 +195,7 @@ User question:
 
         route = route_response.content.strip().upper()
 
-
     print("Route:", route)
-
 
     if route == "RAG":
 
@@ -230,7 +217,6 @@ User question:
             print(chunk)
 
         context = "\n".join(relevant_chunks)
-
 
         rag_prompt = f"""
 You are a helpful hospital analytics assistant.
@@ -269,11 +255,10 @@ Use simple English.
 
         return response.content
 
-
     elif route == "SQL":
 
         sql_prompt = f"""
-You are an expert Microsoft SQL Server analyst.
+You are an expert PostgreSQL analyst.
 
 Generate SQL for the table:
 
@@ -313,11 +298,25 @@ Rules:
 - Return ONLY SQL.
 - Do not use markdown.
 - Do not explain.
-- Use Microsoft SQL Server syntax.
-- Do not use LIMIT.
-- Use TOP when necessary.
-- Use the exact column names provided above.
+- Use PostgreSQL syntax.
+- Do not use TOP.
+- Use LIMIT when necessary.
+- Always put double quotes around the table name and every column name.
+- The table name is exactly "Patients".
+- The column names must match the exact names provided above.
+- Do not use unquoted column names such as Gender, Department, Doctor, or BillingAmount.
 - Do not invent columns.
+
+Example:
+
+For the question "How many male and female patients are there?"
+
+Generate:
+
+SELECT
+    COUNT(CASE WHEN "Gender" = 'Male' THEN 1 END) AS "MalePatients",
+    COUNT(CASE WHEN "Gender" = 'Female' THEN 1 END) AS "FemalePatients"
+FROM "Patients";
 
 When counting records:
 
@@ -329,7 +328,7 @@ Use AVG().
 
 When calculating total revenue or billing:
 
-Use SUM(BillingAmount).
+Use SUM("BillingAmount").
 
 When finding the highest value:
 
@@ -343,15 +342,15 @@ When the user asks for the best doctor,
 top doctor, doctor with the most patients,
 or doctor who treated the most patients:
 
-Group by Doctor,
+Group by "Doctor",
 count the patients,
 order by patient count descending,
-and return the top doctor.
+and return the top doctor using LIMIT 1.
 
 When the user asks for revenue by department:
 
-Group by Department and calculate
-SUM(BillingAmount).
+Group by "Department" and calculate
+SUM("BillingAmount").
 
 Return all departments unless the user explicitly
 asks for only the highest or lowest department.
@@ -359,10 +358,10 @@ asks for only the highest or lowest department.
 When the user asks which department has the
 highest revenue:
 
-Group by Department,
-calculate SUM(BillingAmount),
+Group by "Department",
+calculate SUM("BillingAmount"),
 order by revenue descending,
-and return the top department.
+and return the top department using LIMIT 1.
 
 When the user asks for patient counts by category:
 
@@ -370,15 +369,15 @@ Use COUNT(*) and GROUP BY.
 
 When the user asks about gender:
 
-Use Gender and GROUP BY Gender when appropriate.
+Use "Gender" and GROUP BY "Gender" when appropriate.
 
 When the user asks about admission type:
 
-Use AdmissionType and GROUP BY AdmissionType when appropriate.
+Use "AdmissionType" and GROUP BY "AdmissionType" when appropriate.
 
 When the user asks about medical conditions:
 
-Use MedicalCondition and GROUP BY MedicalCondition when appropriate.
+Use "MedicalCondition" and GROUP BY "MedicalCondition" when appropriate.
 
 Return only executable SQL.
 """
@@ -401,10 +400,8 @@ Return only executable SQL.
 
         sql_query = sql_query.strip()
 
-
         print("\nGenerated SQL:")
         print(sql_query)
-
 
         try:
 
@@ -420,13 +417,11 @@ Return only executable SQL.
                     result.keys()
                 )
 
-
             print("\nSQL Result:")
             print(rows)
 
             print("\nColumns:")
             print(column_names)
-
 
             answer_prompt = f"""
 You are a helpful hospital data analyst.
@@ -469,7 +464,7 @@ MIN means the minimum value.
 
 GROUP BY means the results are separated by category.
 
-TOP 1 means the result represents the top result
+LIMIT 1 means the result represents the top result
 according to the ORDER BY condition.
 
 Use the column names to understand the meaning
@@ -522,7 +517,6 @@ Rules:
 
             return answer_response.content
 
-
         except Exception as e:
 
             print("SQL Error:", e)
@@ -531,7 +525,6 @@ Rules:
                 f"Sorry, I couldn't process that question. "
                 f"Error: {e}"
             )
-
 
     else:
 

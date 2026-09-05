@@ -1,43 +1,27 @@
-import pandas as pd
-from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-server = os.getenv("DB_SERVER")
-database = os.getenv("DB_NAME")
-driver = os.getenv("DB_DRIVER")
+host = "aws-0-ap-northeast-2.pooler.supabase.com"
+port = 5432
+database = "postgres"
+username = "postgres.teglhtzfgvfjdbxjukwu"
+password = os.getenv("SUPABASE_PASSWORD")
 
-connection_string = (
-    f"mssql+pyodbc://@{server}/{database}"
-    f"?driver={driver.replace(' ', '+')}"
-    f"&trusted_connection=yes"
-    f"&TrustServerCertificate=yes"
+if not password:
+    raise ValueError("SUPABASE_PASSWORD is not set in .env")
+
+engine = create_engine(
+    f"postgresql+psycopg2://{username}:{password}@{host}:{port}/{database}"
 )
 
-engine = create_engine(connection_string)
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-DATA_FILE = BASE_DIR / "data" / "clean_healthcare_dataset.csv"
-
-
-def load_data():
-
-    df = pd.read_csv(DATA_FILE)
-
-    df.to_sql(
-        "Patients",
-        engine,
-        if_exists="replace",
-        index=False
+with engine.connect() as connection:
+    result = connection.execute(
+        text('SELECT COUNT(*) FROM "Patients"')
     )
+    count = result.scalar()
 
-    print("Data successfully loaded into SQL Server!")
-
-
-if __name__ == "__main__":
-    load_data()
+print("Supabase database connected successfully!")
+print("Total patients:", count)
