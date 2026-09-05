@@ -1,13 +1,16 @@
 pandas
 sqlalchemy
 pyodbc
+psycopg2-binary
 python-dotenv
 
 streamlit
 
+langchain
 langchain-community
-langchain-ollama
+langchain-groq
 langchain-text-splitters
+groq
 
 chromadb
 sentence-transformers
