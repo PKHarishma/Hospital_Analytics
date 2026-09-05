@@ -11,7 +11,7 @@ username = "postgres.teglhtzfgvfjdbxjukwu"
 password = os.getenv("SUPABASE_PASSWORD")
 
 if not password:
-    raise ValueError("SUPABASE_PASSWORD is not set in .env")
+    raise ValueError("SUPABASE_PASSWORD is not configured")
 
 engine = create_engine(
     f"postgresql+psycopg2://{username}:{password}@{host}:{port}/{database}"
